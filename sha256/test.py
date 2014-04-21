@@ -8,6 +8,8 @@ from Crypto.Hash import SHA256 # to test against.
 
 class TestCrt(unittest.TestCase):
 	def test_against_real_implementation(self):
+		self.assertEquals(SHA256.new("").hexdigest(), sha256.hash(""))
+		
 		for _ in xrange(10000):
 			length = random.randint(3,1024)
 			random_string = "".join([random.choice(string.letters) for _ in xrange(length)])

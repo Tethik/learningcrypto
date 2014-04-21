@@ -139,9 +139,6 @@ if __name__ == "__main__":
 		print hash(args[0])
 		exit(0)
 		
-	line = sys.stdin.readline().strip()
-	while line != "":
-		print hash(line.decode('hex'))
-		line = sys.stdin.readline().strip()
-	print
-	
+	for line in sys.stdin:
+		line = line.strip().decode('hex')		
+		print hash(line)
