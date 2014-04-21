@@ -1,20 +1,8 @@
 #!/usr/bin/python
 
-from Crypto.Hash import SHA256
 from optparse import OptionParser
 options = OptionParser(usage='%prog', description='Calculate sha256 hash')
 import copy, sys
-
-#~ h0 = 0x6a09e667
-#~ h1 = 0xbb67ae85
-#~ h2 = 0x3c6ef372
-#~ h3 = 0xa54ff53a
-#~ h4 = 0x510e527f
-#~ h5 = 0x9b05688c
-#~ h6 = 0x1f83d9ab
-#~ h7 = 0x5be0cd19
-
-
 
 k = [
    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
@@ -43,16 +31,11 @@ def appendbit(bytes, bit):
 def padding(value):
 	bytes = convert_to_bytes_array_mod512(value)
 	orig_length = len(value)
-	#~ bytes = appendbit(bytes, 1)
 	bytes += [0x80]
 		
 	bits = 0
 	while len(bytes) % 64 != 56:
 		bytes += [0]
-		#~ if bits % 8 == 0:
-			#~ bytes = [0] + bytes
-		#~ bytes = appendbit(bytes, 0)
-		#~ bits += 1
 	return bytes
 
 def preprocess(value):
@@ -61,56 +44,93 @@ def preprocess(value):
 	
 	# move 64 / 8 = 8 bytes to the left.
 	bytes = bytes + convert_int64_to_bytes(orig_length)
-	#~ print len(bytes)
 	assert(len(bytes) % 64 == 0)
 	return bytes
+	
+def rotr(value, offset):
+	return (value >> offset) | (value << (32 - offset)) % (1 << 32)
+
+def sigma0(value):
+	return rotr(value, 7) ^ rotr(value, 18) ^ (value >> 3)
+	
+def sigma1(value):		
+	return rotr(value, 17) ^ rotr(value, 19) ^ (value >> 10)
+	
+def ch(x,y,z):
+	return (x & y) ^ ((~x) & z)
+	
+def maj(x,y,z):
+	return (x & y) ^ (x & z) ^ (y & z)
+	
+def sum0(x):
+	return rotr(x, 2) ^ rotr(x, 13) ^ rotr(x, 22)
+	
+def sum1(x):
+	return rotr(x, 6) ^ rotr(x, 11) ^ rotr(x, 25)
+	
+def formathex(x):
+	h = hex(x).replace("0x", "").replace("L","")
+	return "0"*(8-len(h))+h
 
 def hash(value):
 	# initial values
-	h = [ 0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19 ]	
+	H = [ 0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19 ]	
 	
-	modulo = 2 ** 32
+	modulo = 1 << 32
 	# make into 64 byte chunks
 	chunks = preprocess(value)
 	# iterate through each
-	for c in xrange(0, len(chunks) / 64, 64):
+	for c in xrange(0, len(chunks), 64):
 		chunk = chunks[c:(c+64)]
 		
-		print "Block contents:"
+		w = [0]*64
+		
 		for i in xrange(0, len(chunk), 4):
-			print "W["+str(i/4)+"] = ", [hex(v) for v in chunk[i:i+4]]
-		print 
+			w[i / 4] = (chunk[i] << 24) | (chunk[i+1] << 16) | (chunk[i+2] << 8) | (chunk[i+3])
 		
-		w = chunk[0:16] + [0]*48 # message schedule array
-		
-		for i in xrange(16, 63):
-			s0 = (w[i - 15] >> 7) ^ (w[i - 15] >> 18) ^ (w[i - 15] >> 3)
-			s1 = (w[i - 2] >> 17) ^ (w[i - 2] >> 19) ^ (w[i - 2] >> 10)
-			w[i] = (w[i - 16] + s0 + w[i - 7] + s1) % modulo
+		for i in xrange(16, 64):			
+			w[i] = (w[i-16] + sigma0(w[i-15]) + w[i-7] + sigma1(w[i-2])) & 0xFFFFFFFF
+			
+		#~ print "W contents:"
+		#~ for i in xrange(0, len(chunk), 4):
+			#~ print "W["+str(i/4)+"] = ", [hex(v) for v in w[i:i+4]]
+		#~ print 
 
-		wh = copy.deepcopy(h) #working values
+		a = H[0]
+		b = H[1]
+		c = H[2]
+		d = H[3]
+		e = H[4]
+		f = H[5]
+		g = H[6]
+		h = H[7]
 		
 		# compression function mainloop
-		for i in xrange(0, 64):
-			s1 = (wh[4] >> 6) ^ (wh[4] >> 11) ^ (wh[4] >> 25)
-			ch = (wh[4] & wh[5]) ^ ((~wh[4]) & wh[6])
-			temp1 = (wh[7] + s1 + ch + k[i] + w[i]) % modulo
-			s0 = (wh[0] >> 2) ^ (wh[0] >> 13) ^ (wh[0] >> 22)
-			maj = (wh[0] & wh[1]) ^ (wh[0] & wh[2]) ^ (wh[1] & wh[2])
-			temp2 = (s0 + maj) % modulo
+		for i in xrange(64):
+			temp1 = (h + sum1(e) + ch(e,f,g) + k[i] + w[i]) & 0xFFFFFFFF
+			temp2 = (sum0(a) + maj(a,b,c)) & 0xFFFFFFFF
 			
-			for s in xrange(7, 0, -1):
-				wh[s] = wh[s-1]
-			wh[4] = (wh[4] + temp1) % modulo
-			wh[0] = (temp1 + temp2) % modulo
-			print "t = "+str(i)+" ", [hex(c) for c in wh]
+			h = g
+			g = f
+			f = e
+			e = (d + temp1) & 0xFFFFFFFF
+			d = c
+			c = b
+			b = a
+			a = (temp1 + temp2) & 0xFFFFFFFF
 		
-		i = 0
-		while i < len(h):
-			h[i] = (h[i] + wh[i]) % modulo
-			i += 1
+		# ugly, but trying to get this to work.
+		H[0] = (H[0] + a) & 0xFFFFFFFF
+		H[1] = (H[1] + b) & 0xFFFFFFFF
+		H[2] = (H[2] + c) & 0xFFFFFFFF
+		H[3] = (H[3] + d) & 0xFFFFFFFF
+		H[4] = (H[4] + e) & 0xFFFFFFFF
+		H[5] = (H[5] + f) & 0xFFFFFFFF
+		H[6] = (H[6] + g) & 0xFFFFFFFF
+		H[7] = (H[7] + h) & 0xFFFFFFFF
+		
 			
-	hxdigest = "".join([hex(v).replace("0x", "").replace("L","") for v in h])
+	hxdigest = "".join([formathex(v) for v in H])
 	return hxdigest
 
 if __name__ == "__main__":
@@ -121,5 +141,7 @@ if __name__ == "__main__":
 		
 	line = sys.stdin.readline().strip()
 	while line != "":
-		print hash(line)
+		print hash(line.decode('hex'))
 		line = sys.stdin.readline().strip()
+	print
+	
