@@ -1,4 +1,4 @@
-import md5alt
+import md5py
 import struct
 
 def hexdump(s):
@@ -22,17 +22,17 @@ def pad(s):
 		s += '\x80' + '\000' * (padlen - 1)
 	return s + struct.pack('<q', bit_len)
 
-val = md5alt.new(secret+original)
+val = md5py.new(secret+original)
 print "Original payload:", val.hexdigest()
 
 payload = pad(secret+original)+append
 hexdump(payload)
 
-legit = md5alt.new(payload)
+legit = md5py.new(payload)
 print "Legit digest:", legit.hexdigest()
 
-not_legit = md5alt.new("A"*64)
-not_legit.A, not_legit.B, not_legit.C, not_legit.D = md5alt._bytelist2long(val.digest())
+not_legit = md5py.new("A"*64)
+not_legit.A, not_legit.B, not_legit.C, not_legit.D = md5py._bytelist2long(val.digest())
 not_legit.update(append)
 print "Illicit digest:", not_legit.hexdigest()
 
